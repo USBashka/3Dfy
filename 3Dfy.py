@@ -32,9 +32,7 @@ pad = 16
 output = predicted_depth.squeeze().cpu().numpy() * 100
 output = output[pad:-pad, pad:-pad]
 
-print(output[1][1])
-im = Image.fromarray(output).convert("L")
-im.save("output.jpg")
+
 
 image = image.crop((pad, pad, image.width - pad, image.height - pad))
 
