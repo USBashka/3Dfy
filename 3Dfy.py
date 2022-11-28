@@ -14,7 +14,7 @@ feature_extractor = GLPNFeatureExtractor.from_pretrained("vinvino02/glpn-nyu")
 model = GLPNForDepthEstimation.from_pretrained("vinvino02/glpn-nyu")
 
 # load and resize the input image
-image = Image.open("image.jpg")
+image = Image.open("image.png")
 new_height = 480 if image.height > 480 else image.height
 new_height -= (new_height % 32)
 new_width = int(new_height * image.width / image.height)
@@ -33,21 +33,12 @@ with torch.no_grad():
 
 # remove borders
 pad = 16
-output = predicted_depth.squeeze().cpu().numpy() * 100
+output = predicted_depth.squeeze().cpu().numpy() * 1000.0
 output = output[pad:-pad, pad:-pad]
-
 
 
 image = image.crop((pad, pad, image.width - pad, image.height - pad))
 
-# visualize the prediction
-# fig, ax = plt.subplots(1, 2)
-# ax[0].imshow(image)
-# ax[0].tick_params(left=False, bottom=False, labelleft=False, labelbottom=False)
-# ax[1].imshow(output, cmap='gray')
-# ax[1].tick_params(left=False, bottom=False, labelleft=False, labelbottom=False)
-# plt.tight_layout()
-# plt.pause(115)
 
 width, height = image.size
 
@@ -66,4 +57,20 @@ camera_intrinsic.set_intrinsics(width, height, 500, 500, width/2, height/2)
 # create point cloud
 pcd = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_image, camera_intrinsic)
 
-o3d.visualization.draw_geometries([pcd])
+# outliers removal
+cl, ind = pcd.remove_statistical_outlier(nb_neighbors=20, std_ratio=20.0)
+pcd = pcd.select_by_index(ind)
+
+# estimate normals
+pcd.estimate_normals()
+pcd.orient_normals_to_align_with_direction(orientation_reference=np.array([0., 0., -1.]))
+
+# surface reconstruction
+mesh = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(pcd, depth=10, n_threads=1)[0]
+
+# rotate the mesh
+rotation = mesh.get_rotation_matrix_from_xyz((np.pi, 0, 0))
+mesh.rotate(rotation, center=(0, 0, 0))
+
+
+o3d.visualization.draw_geometries([mesh])
